@@ -1,0 +1,62 @@
+name: daily-basketball-news
+
+on:
+  schedule:
+    - cron: '35 0 * * *'   # 00:35 UTC = 09:35 KST (매일, 주말 포함)
+  workflow_dispatch: {}     # 수동 실행 버튼
+
+permissions:
+  contents: write           # 상태(data/*)와 docs/index.html 커밋용
+
+concurrency:
+  group: daily-news
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Collect, publish, email, kakao
+        env:
+          # ── 메일(SMTP) ──
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: '587'
+          SMTP_SECURE: 'false'
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          NEWS_MAIL_FROM: ${{ secrets.SMTP_USER }}
+          NEWS_MAIL_TO: ${{ secrets.NEWS_MAIL_TO }}
+          # ── 뉴스 설정 ──
+          NEWS_KEYWORDS: 농구,KBL,WKBL,NBA,유소년 농구
+          NEWS_HOURS: '24'
+          NEWS_MAX_PER_KEYWORD: '6'
+          NEWS_WEEKLY_KEYWORDS: ''
+          NEWS_WEEKLY_DAYS: '7'
+          NEWS_YONGSAN_KEYWORDS: 용산중 농구,용산고 농구,신석 농구,이정석 농구
+          NEWS_YONGSAN_DAYS: '7'
+          # ── 카카오(본인 카톡) ──
+          KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          KAKAO_STATE_KEY: ${{ secrets.KAKAO_STATE_KEY }}
+          NEWS_WEB_URL: https://vgun1205.github.io/basketball-news/
+        run: node scripts/daily-cloud.mjs
+
+      - name: Commit state & page
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data docs || true
+          git diff --cached --quiet || git commit -m "chore: daily news state $(date -u +%F)"
+          git push

@@ -1,0 +1,17 @@
+{
+  "name": "basketball-news",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "농구 관련 뉴스 자동 수집(Google News RSS) → 매일 이메일 발송",
+  "scripts": {
+    "send": "node --env-file-if-exists=.env scripts/send-once.mjs",
+    "preview": "node --env-file-if-exists=.env scripts/preview.mjs",
+    "seed": "node --env-file-if-exists=.env scripts/seed-seen.mjs",
+    "kakao:token": "node --env-file-if-exists=.env scripts/kakao-token.mjs",
+    "kakao:test": "node --env-file-if-exists=.env scripts/kakao-test.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "6.9.14"
+  }
+}
