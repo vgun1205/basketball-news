@@ -47,9 +47,19 @@ if (news.total === 0) {
 }
 
 // 1) 웹 게시용 HTML (GitHub Pages: docs/index.html)
+//    이메일 HTML에 모바일 viewport·제목·가독성 스타일을 주입(폰에서 글씨 작아지는 문제 방지).
 const { subject, html } = buildNewsEmail(news, { yongsanKeywords });
+const HEAD = `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>오늘의 농구 뉴스</title>
+<style>
+  @media (max-width: 600px) {
+    body { padding: 6px !important; }
+    a { font-size: 17px !important; }              /* 기사 제목 */
+    div[style*="font-size:13px"] { font-size: 15px !important; } /* 요약 */
+    div[style*="font-size:12px"] { font-size: 13px !important; } /* 출처·시간 */
+  }
+</style></head>`;
 mkdirSync(join(root, 'docs'), { recursive: true });
-writeFileSync(join(root, 'docs', 'index.html'), html.replace('<html>', `<html><!-- ${subject} -->`), 'utf-8');
+writeFileSync(join(root, 'docs', 'index.html'), html.replace('<html>', `<html lang="ko">${HEAD}<!-- ${subject} -->`), 'utf-8');
 console.log('웹 게시 준비: docs/index.html');
 
 // 2) 이메일 발송(재시도 3회)
