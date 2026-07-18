@@ -8,6 +8,7 @@ import { loadSeen, seenKeys, markSeen, saveSeen } from '../lib/seen.js';
 import { loadWeekly, dueWeekly, markWeekly, saveWeekly } from '../lib/weekly.js';
 import { sendKakaoMemo, buildKakaoText } from '../lib/kakao.js';
 import { loadStoredRefresh, saveStoredRefresh } from '../lib/stateCrypto.js';
+import { appendArchive } from '../lib/archive.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,8 +59,13 @@ const HEAD = `<head><meta charset="utf-8"><meta name="viewport" content="width=d
     div[style*="font-size:12px"] { font-size: 13px !important; } /* 출처·시간 */
   }
 </style></head>`;
+// 헤더 부제 옆에 아카이브 링크 노출
+const ARCHIVE_LINK = `<div style="margin-top:6px"><a href="archive/" style="color:#FFD9A0;font-size:12px;text-decoration:none">🔍 지난 뉴스 검색 (아카이브) →</a></div>`;
+const pageHtml = html
+  .replace('<html>', `<html lang="ko">${HEAD}<!-- ${subject} -->`)
+  .replace('· 매일 자동 발송</div>', `· 매일 자동 발송</div>${ARCHIVE_LINK}`);
 mkdirSync(join(root, 'docs'), { recursive: true });
-writeFileSync(join(root, 'docs', 'index.html'), html.replace('<html>', `<html lang="ko">${HEAD}<!-- ${subject} -->`), 'utf-8');
+writeFileSync(join(root, 'docs', 'index.html'), pageHtml, 'utf-8');
 console.log('웹 게시 준비: docs/index.html');
 
 // 2) 이메일 발송(재시도 3회)
@@ -95,11 +101,15 @@ if (process.env.KAKAO_REFRESH_TOKEN && process.env.KAKAO_REST_KEY) {
   console.log('카톡 미설정 — 건너뜀');
 }
 
-// 4) 발송 이력 저장(이메일 또는 카톡 중 하나라도 성공 시)
+// 4) 발송 이력 저장 + 아카이브 누적(이메일 또는 카톡 중 하나라도 성공 시)
 if (mailed || kakaoOk) {
   markSeen(store, news.groups.flatMap((g) => g.items).map(keyOf));
   console.log('발송이력 저장:', saveSeen(store), '건');
   if (dueW.length) { markWeekly(wstore, dueW); saveWeekly(wstore); }
+  const kstA = new Date(Date.now() + 9 * 3600 * 1000);
+  const dateA = `${kstA.getUTCFullYear()}-${String(kstA.getUTCMonth() + 1).padStart(2, '0')}-${String(kstA.getUTCDate()).padStart(2, '0')}`;
+  const arc = appendArchive(news, dateA);
+  console.log('아카이브 누적:', arc.added, '건 추가 · 총', arc.total, '건');
 } else {
   console.error('이메일·카톡 모두 실패 — 이력 미기록(다음 실행 재시도)');
   process.exit(1);

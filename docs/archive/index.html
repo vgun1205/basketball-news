@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>농구 뉴스 아카이브</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#f4f5f7; font-family:'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',sans-serif; color:#222; }
+  .wrap { max-width:980px; margin:0 auto; padding:14px; }
+  .head { background:#1F3864; color:#fff; border-radius:10px; padding:16px 20px; }
+  .head h1 { margin:0; font-size:19px; }
+  .head .sub { font-size:12px; opacity:.85; margin-top:3px; }
+  .head a { color:#FFD9A0; font-size:12px; text-decoration:none; }
+  .bar { display:flex; gap:8px; margin:12px 0; flex-wrap:wrap; }
+  .bar input, .bar select { padding:10px 12px; border:1px solid #d5d9e0; border-radius:8px; font-size:15px; background:#fff; }
+  .bar input { flex:1; min-width:200px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { border:1px solid #d5d9e0; background:#fff; border-radius:14px; padding:4px 12px; font-size:12px; cursor:pointer; }
+  .chip.on { background:#EE6730; border-color:#EE6730; color:#fff; font-weight:700; }
+  .stat { font-size:12px; color:#666; margin:8px 2px; }
+  .day { font-size:14px; font-weight:800; color:#1F3864; margin:18px 2px 6px; border-bottom:2px solid #1F3864; padding-bottom:4px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; margin-bottom:8px; }
+  .card a.title { font-size:15px; font-weight:600; color:#1F3864; text-decoration:none; line-height:1.4; }
+  .card .sum { font-size:13px; color:#555; margin-top:5px; line-height:1.55; }
+  .card .meta { font-size:12px; color:#888; margin-top:5px; }
+  .card .kw { display:inline-block; background:#EEF3FA; color:#1F3864; border-radius:9px; padding:1px 8px; font-size:11px; font-weight:700; margin-right:6px; }
+  .more { display:block; width:100%; padding:12px; margin:14px 0 30px; border:1px solid #d5d9e0; background:#fff; border-radius:8px; font-size:14px; cursor:pointer; }
+  .empty { color:#888; font-size:14px; padding:30px 0; text-align:center; }
+  mark { background:#FFE9A8; padding:0 1px; }
+  @media (max-width:600px) {
+    .card a.title { font-size:17px; }
+    .card .sum { font-size:15px; }
+    .card .meta { font-size:13px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>🏀 농구 뉴스 아카이브</h1>
+    <div class="sub">매일 발송된 기사가 누적됩니다 · <a href="../">← 오늘의 뉴스로</a></div>
+  </div>
+  <div class="bar">
+    <input id="q" type="search" placeholder="검색 (제목·요약·언론사) 예: 이솔민, 용산고, 트레이드">
+    <select id="date"><option value="">전체 기간</option></select>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="stat" id="stat"></div>
+  <div id="list"></div>
+  <button class="more" id="more" style="display:none">더 보기</button>
+</div>
+<script>
+let ALL = [], shown = 0;
+const PAGE = 50;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let kwSel = '';
+
+function hl(text, q) {
+  if (!q) return esc(text);
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return esc(text);
+  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + hl(text.slice(i + q.length), q);
+}
+
+function filtered() {
+  const q = $('q').value.trim().toLowerCase();
+  const d = $('date').value;
+  return ALL.filter((a) =>
+    (!d || a.d === d) &&
+    (!kwSel || a.k === kwSel) &&
+    (!q || (a.t + ' ' + a.m + ' ' + a.s).toLowerCase().includes(q)));
+}
+
+function render(reset = true) {
+  const q = $('q').value.trim();
+  const items = filtered();
+  if (reset) shown = 0;
+  const slice = items.slice(0, shown + PAGE);
+  shown = slice.length;
+  let html = '', curDay = '';
+  for (const a of slice) {
+    if (a.d !== curDay) { curDay = a.d; html += '<div class="day">' + curDay + '</div>'; }
+    html += '<div class="card">'
+      + '<a class="title" href="' + esc(a.u) + '" target="_blank" rel="noopener">' + hl(a.t, q) + '</a>'
+      + (a.m ? '<div class="sum">' + hl(a.m, q) + '</div>' : '')
+      + '<div class="meta"><span class="kw">#' + esc(a.k) + '</span>' + esc(a.s) + '</div>'
+      + '</div>';
+  }
+  $('list').innerHTML = html || '<div class="empty">검색 결과가 없습니다.</div>';
+  $('stat').textContent = '총 ' + items.length + '건' + (q || $('date').value || kwSel ? ' (필터 적용)' : '');
+  $('more').style.display = shown < items.length ? 'block' : 'none';
+}
+
+fetch('news.json?t=' + Date.now()).then((r) => r.json()).then((data) => {
+  ALL = data.sort((a, b) => (b.d.localeCompare(a.d)) || (b.ts - a.ts));
+  const dates = [...new Set(ALL.map((a) => a.d))];
+  for (const d of dates) { const o = document.createElement('option'); o.value = d; o.textContent = d; $('date').appendChild(o); }
+  const kws = [...new Set(ALL.map((a) => a.k))];
+  $('chips').innerHTML = kws.map((k) => '<span class="chip" data-k="' + esc(k) + '">#' + esc(k) + '</span>').join('');
+  document.querySelectorAll('.chip').forEach((c) => c.onclick = () => {
+    kwSel = (kwSel === c.dataset.k) ? '' : c.dataset.k;
+    document.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.dataset.k === kwSel));
+    render();
+  });
+  render();
+}).catch(() => { $('list').innerHTML = '<div class="empty">아카이브 데이터를 불러오지 못했습니다.</div>'; });
+
+$('q').addEventListener('input', () => render());
+$('date').addEventListener('change', () => render());
+$('more').onclick = () => render(false);
+</script>
+</body>
+</html>
