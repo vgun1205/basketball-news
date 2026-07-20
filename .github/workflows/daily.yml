@@ -2,7 +2,7 @@ name: daily-basketball-news
 
 on:
   schedule:
-    - cron: '0 0 * * *'    # 00:00 UTC = 09:00 KST (매일, 주말 포함)
+    - cron: '55 23 * * *'  # 23:55 UTC = 08:55 KST (매일) — 00:00 UTC 혼잡 슬롯 회피, 실도착 ~09시
   workflow_dispatch: {}     # 수동 실행 버튼
 
 permissions:
