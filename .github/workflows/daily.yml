@@ -37,7 +37,7 @@ jobs:
           NEWS_MAIL_FROM: ${{ secrets.SMTP_USER }}
           NEWS_MAIL_TO: ${{ secrets.NEWS_MAIL_TO }}
           # ── 뉴스 설정 ──
-          NEWS_KEYWORDS: 농구,KBL,WKBL,NBA,유소년 농구
+          NEWS_KEYWORDS: 농구,KBL,WKBL,NBA,유소년 농구,중고농구,고교농구,중학농구,여고 농구,여중 농구
           NEWS_HOURS: '24'
           NEWS_MAX_PER_KEYWORD: '6'
           NEWS_WEEKLY_KEYWORDS: ''
