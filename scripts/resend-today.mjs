@@ -13,8 +13,15 @@ const kst = new Date(Date.now() + 9 * 36e5);
 const today = `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`;
 const items = arc.filter((a) => a.d === today);
 const yk = (process.env.NEWS_YONGSAN_KEYWORDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+// 학교부 키워드는 '중고 농구' 챕터로 병합 표시
+const mergeK = (process.env.NEWS_MERGE_KEYWORDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const mergeL = process.env.NEWS_MERGE_LABEL || '중고 농구';
 const byK = {};
-for (const a of items) (byK[a.k] = byK[a.k] || []).push({ title: a.t, source: a.s, link: a.u, realLink: a.u, summary: a.m, ts: a.ts });
+for (const a of items) {
+  const k = mergeK.includes(a.k) ? mergeL : a.k;
+  (byK[k] = byK[k] || []).push({ title: a.t, source: a.s, link: a.u, realLink: a.u, summary: a.m, ts: a.ts });
+}
+for (const k of Object.keys(byK)) byK[k].sort((x, y) => y.ts - x.ts);
 const news = { groups: Object.entries(byK).map(([keyword, its]) => ({ keyword, items: its })), total: items.length, generatedAt: Date.now() };
 console.log('오늘 기사:', news.total, '건');
 const r = await sendNewsEmail(news, { yongsanKeywords: yk });

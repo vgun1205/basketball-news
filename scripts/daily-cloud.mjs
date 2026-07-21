@@ -2,7 +2,7 @@
 //   수집(증분) → docs/index.html 웹 게시 → 이메일 발송 → 본인 카톡 발송(요약+링크)
 // 상태(data/seen.json·weekly.json·kakao.enc)는 워크플로가 저장소에 커밋해 다음 실행에 이어짐.
 // 환경변수는 GitHub Secrets/env로 주입(.env 불필요). PC가 꺼져 있어도 무관.
-import { collectNews, keyOf } from '../lib/news.js';
+import { collectNews, keyOf, mergeGroups } from '../lib/news.js';
 import { sendNewsEmail, buildNewsEmail } from '../lib/mailer.js';
 import { loadSeen, seenKeys, markSeen, saveSeen } from '../lib/seen.js';
 import { loadWeekly, dueWeekly, markWeekly, saveWeekly } from '../lib/weekly.js';
@@ -48,7 +48,12 @@ if (!process.env.FORCE_SEND && existsSync(LAST_SENT) && readFileSync(LAST_SENT, 
 
 const store = loadSeen();
 console.log('키워드:', keywords.join(', '), '· 발송이력:', seenKeys(store).length, '건');
-const news = await collectNews({ keywords, hours, maxPerKeyword, seenKeys: seenKeys(store), hoursByKeyword, strictKeywords: yongsanKeywords });
+// strictKeywords=전체: 기간(일반 24h·용산 7일) 밖의 오래된 기사를 절대 채워넣지 않음
+const news = await collectNews({ keywords, hours, maxPerKeyword, seenKeys: seenKeys(store), hoursByKeyword, strictKeywords: keywords });
+// 학교부 검색 키워드들은 표시에서 '중고 농구' 한 챕터로 병합
+const mergeK = split(process.env.NEWS_MERGE_KEYWORDS);
+const mergeL = process.env.NEWS_MERGE_LABEL || '중고 농구';
+news.groups = mergeGroups(news.groups, mergeK, mergeL);
 console.log('신규 기사:', news.total, '건');
 
 if (news.total === 0) {

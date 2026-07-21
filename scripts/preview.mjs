@@ -1,6 +1,6 @@
 // 발송 없이 수집 결과를 콘솔에 미리보기 + HTML을 data/preview.html로 저장.
 // 실제 발송과 동일하게 '이미 보낸 기사'는 제외하고 보여줌(이력은 건드리지 않음).
-import { collectNews } from '../lib/news.js';
+import { collectNews, mergeGroups } from '../lib/news.js';
 import { buildNewsEmail } from '../lib/mailer.js';
 import { loadSeen, seenKeys } from '../lib/seen.js';
 import { loadWeekly, dueWeekly } from '../lib/weekly.js';
@@ -30,7 +30,10 @@ const strictKeywords = yongsanKeywords;
 
 const store = loadSeen();
 console.log('발송이력', seenKeys(store).length, `건 제외 · 용산챕터(${yongsanDays}일 이내):`, yongsanKeywords.join(',') || '없음');
-const news = await collectNews({ keywords, hours, maxPerKeyword, seenKeys: seenKeys(store), hoursByKeyword, strictKeywords });
+const news = await collectNews({ keywords, hours, maxPerKeyword, seenKeys: seenKeys(store), hoursByKeyword, strictKeywords: keywords });
+news.groups = mergeGroups(news.groups,
+  (process.env.NEWS_MERGE_KEYWORDS || '').split(',').map((s) => s.trim()).filter(Boolean),
+  process.env.NEWS_MERGE_LABEL || '중고 농구');
 for (const g of news.groups) {
   const tag = yongsanKeywords.includes(g.keyword) ? '[용산]' : '';
   console.log(`\n[#${g.keyword}]${tag} ${g.items.length}건`);
