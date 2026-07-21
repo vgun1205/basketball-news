@@ -9,6 +9,7 @@ import { loadWeekly, dueWeekly, markWeekly, saveWeekly } from '../lib/weekly.js'
 import { sendKakaoMemo, buildKakaoText } from '../lib/kakao.js';
 import { loadStoredRefresh, saveStoredRefresh } from '../lib/stateCrypto.js';
 import { appendArchive } from '../lib/archive.js';
+import { writeDayPage } from '../lib/page.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,28 +64,7 @@ if (news.total === 0) {
   process.exit(0);
 }
 
-// 1) 웹 게시용 HTML (GitHub Pages: docs/index.html)
-//    이메일 HTML에 모바일 viewport·제목·가독성 스타일을 주입(폰에서 글씨 작아지는 문제 방지).
-const { subject, html } = buildNewsEmail(news, { yongsanKeywords });
-const HEAD = `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>오늘의 농구 뉴스</title>
-<style>
-  @media (max-width: 600px) {
-    body { padding: 6px !important; }
-    a { font-size: 17px !important; }              /* 기사 제목 */
-    div[style*="font-size:13px"] { font-size: 15px !important; } /* 요약 */
-    div[style*="font-size:12px"] { font-size: 13px !important; } /* 출처·시간 */
-  }
-</style></head>`;
-// 헤더 부제 옆에 아카이브 링크 노출
-const ARCHIVE_LINK = `<div style="margin-top:6px"><a href="archive/" style="color:#FFD9A0;font-size:12px;text-decoration:none">🔍 지난 뉴스 검색 (아카이브) →</a></div>`;
-const pageHtml = html
-  .replace('<html>', `<html lang="ko">${HEAD}<!-- ${subject} -->`)
-  .replace('· 매일 자동 발송</div>', `· 매일 자동 발송</div>${ARCHIVE_LINK}`);
-mkdirSync(join(root, 'docs'), { recursive: true });
-writeFileSync(join(root, 'docs', 'index.html'), pageHtml, 'utf-8');
-console.log('웹 게시 준비: docs/index.html');
-
-// 2) 이메일 발송(재시도 3회)
+// 1) 이메일 발송(재시도 3회) — 메일은 '이번에 새로 찾은 기사'만(증분)
 let mailed = false;
 for (let i = 1; i <= 3 && !mailed; i++) {
   try {
@@ -127,6 +107,9 @@ if (mailed || kakaoOk) {
   const arc = appendArchive(news, dateA);
   console.log('아카이브 누적:', arc.added, '건 추가 · 총', arc.total, '건');
   writeFileSync(LAST_SENT, dateA, 'utf-8'); // 오늘 발송 완료 표시(늦은 크론 중복발송 방지)
+  // 웹페이지는 '오늘 하루치 전체'로 재생성(증분 실행이 여러 번이어도 페이지는 항상 하루 전체)
+  const pageCount = writeDayPage({ yongsanKeywords, mergeKeywords: mergeK, mergeLabel: mergeL });
+  console.log('웹 게시(오늘 하루치):', pageCount, '건');
 } else {
   console.error('이메일·카톡 모두 실패 — 이력 미기록(다음 실행 재시도)');
   process.exit(1);
