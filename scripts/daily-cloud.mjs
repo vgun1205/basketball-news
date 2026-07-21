@@ -35,6 +35,17 @@ const hoursByKeyword = {
   ...Object.fromEntries(yongsanKeywords.map((k) => [k, yongsanDays * 24])),
 };
 
+// 하루 1회 가드: 크론을 여러 번 걸어두므로(지연 대비), 이미 오늘 발송했으면 스킵.
+const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
+const todayKst = `${kstNow.getUTCFullYear()}-${String(kstNow.getUTCMonth() + 1).padStart(2, '0')}-${String(kstNow.getUTCDate()).padStart(2, '0')}`;
+const LAST_SENT = join(root, 'data', 'last-sent.txt');
+const { readFileSync, existsSync } = await import('node:fs');
+if (!process.env.FORCE_SEND && existsSync(LAST_SENT) && readFileSync(LAST_SENT, 'utf-8').trim() === todayKst) {
+  console.log(`오늘(${todayKst}) 이미 발송됨 — 스킵`);
+  clearTimeout(watchdog);
+  process.exit(0);
+}
+
 const store = loadSeen();
 console.log('키워드:', keywords.join(', '), '· 발송이력:', seenKeys(store).length, '건');
 const news = await collectNews({ keywords, hours, maxPerKeyword, seenKeys: seenKeys(store), hoursByKeyword, strictKeywords: yongsanKeywords });
@@ -110,6 +121,7 @@ if (mailed || kakaoOk) {
   const dateA = `${kstA.getUTCFullYear()}-${String(kstA.getUTCMonth() + 1).padStart(2, '0')}-${String(kstA.getUTCDate()).padStart(2, '0')}`;
   const arc = appendArchive(news, dateA);
   console.log('아카이브 누적:', arc.added, '건 추가 · 총', arc.total, '건');
+  writeFileSync(LAST_SENT, dateA, 'utf-8'); // 오늘 발송 완료 표시(늦은 크론 중복발송 방지)
 } else {
   console.error('이메일·카톡 모두 실패 — 이력 미기록(다음 실행 재시도)');
   process.exit(1);
