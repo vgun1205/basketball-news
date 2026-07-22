@@ -2,11 +2,12 @@ name: daily-basketball-news
 
 on:
   schedule:
-    # GitHub 무료 크론은 지연·누락이 잦아 하루 4번 시도. 이미 발송한 날은 스크립트가 스킵(중복 없음).
-    - cron: '55 23 * * *'  # 08:55 KST
-    - cron: '15 0 * * *'   # 09:15 KST
+    # ※주력은 PC 로컬 발송(매일 09:00, EWI 방식). 클라우드는 'PC 꺼진 날' 보조.
+    # GitHub 무료 크론은 지연·누락이 잦아 여러 번 시도. 이미 발송한 날은 스크립트가 스킵(중복 없음).
+    - cron: '5 0 * * *'    # 09:05 KST (PC 09:00 이후 — PC가 껐으면 클라우드가 커버)
     - cron: '45 0 * * *'   # 09:45 KST
-    - cron: '30 1 * * *'   # 10:30 KST (최후 보루)
+    - cron: '30 1 * * *'   # 10:30 KST
+    - cron: '0 3 * * *'    # 12:00 KST (최후 보루)
   workflow_dispatch: {}     # 수동 실행 버튼
 
 permissions:
