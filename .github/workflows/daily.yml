@@ -51,6 +51,8 @@ jobs:
           NEWS_WEEKLY_DAYS: '7'
           NEWS_YONGSAN_KEYWORDS: 용산중 농구,용산고 농구,신석 농구,이정석 농구
           NEWS_YONGSAN_DAYS: '7'
+          NEWS_LONG_KEYWORDS: 용산중 농구,용산고 농구,신석 농구,이정석 농구,중고농구,고교농구,중학농구,여고 농구,여중 농구
+          NEWS_LONG_DAYS: '7'
           # ── 카카오(본인 카톡) ──
           KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}

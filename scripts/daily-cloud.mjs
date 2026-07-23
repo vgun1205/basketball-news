@@ -24,7 +24,10 @@ const weeklyKeywords = split(process.env.NEWS_WEEKLY_KEYWORDS);
 const yongsanKeywords = split(process.env.NEWS_YONGSAN_KEYWORDS);
 const weeklyDays = Number(process.env.NEWS_WEEKLY_DAYS || 7);
 const yongsanDays = Number(process.env.NEWS_YONGSAN_DAYS || 7);
-const hours = Number(process.env.NEWS_HOURS || 24);
+const hours = Number(process.env.NEWS_HOURS || 24);       // 일반 뉴스: 1일(24h)
+// 장기(7일) 조회 키워드 = 용산 + 중고 등. 없으면 용산 키워드만 장기로.
+const longKeywords = split(process.env.NEWS_LONG_KEYWORDS).length ? split(process.env.NEWS_LONG_KEYWORDS) : yongsanKeywords;
+const longDays = Number(process.env.NEWS_LONG_DAYS || 7);
 const maxPerKeyword = Number(process.env.NEWS_MAX_PER_KEYWORD || 6);
 
 const wstore = loadWeekly();
@@ -33,7 +36,7 @@ const dailyKeywords = allKeywords.filter((k) => !weeklyKeywords.includes(k));
 const keywords = [...new Set([...dailyKeywords, ...dueW, ...yongsanKeywords])];
 const hoursByKeyword = {
   ...Object.fromEntries(dueW.map((k) => [k, weeklyDays * 24])),
-  ...Object.fromEntries(yongsanKeywords.map((k) => [k, yongsanDays * 24])),
+  ...Object.fromEntries(longKeywords.map((k) => [k, longDays * 24])), // 용산·중고 = 7일, 나머지는 hours(1일)
 };
 
 // 하루 1회 가드: 크론을 여러 번 걸어두므로(지연 대비), 이미 오늘 발송했으면 스킵.
@@ -108,7 +111,7 @@ if (mailed || kakaoOk) {
   console.log('아카이브 누적:', arc.added, '건 추가 · 총', arc.total, '건');
   writeFileSync(LAST_SENT, dateA, 'utf-8'); // 오늘 발송 완료 표시(늦은 크론 중복발송 방지)
   // 웹페이지는 '오늘 하루치 전체'로 재생성(증분 실행이 여러 번이어도 페이지는 항상 하루 전체)
-  const pageCount = writeDayPage({ yongsanKeywords, mergeKeywords: mergeK, mergeLabel: mergeL });
+  const pageCount = writeDayPage({ yongsanKeywords, mergeKeywords: mergeK, mergeLabel: mergeL, shortDays: hours / 24, longDays, longKeywords });
   console.log('웹 게시(오늘 하루치):', pageCount, '건');
 } else {
   console.error('이메일·카톡 모두 실패 — 이력 미기록(다음 실행 재시도)');
