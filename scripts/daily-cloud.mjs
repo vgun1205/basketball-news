@@ -28,6 +28,7 @@ const yongsanDays = Number(process.env.NEWS_YONGSAN_DAYS || 7);
 const hours = Number(process.env.NEWS_HOURS || 24);       // 일반 뉴스: 1일(24h)
 // 장기(7일) 조회 키워드 = 용산 + 중고 등. 없으면 용산 키워드만 장기로.
 const longKeywords = [...(split(process.env.NEWS_LONG_KEYWORDS).length ? split(process.env.NEWS_LONG_KEYWORDS) : yongsanKeywords), '용산 전문매체'];
+const chapterOrder = split(process.env.NEWS_CHAPTER_ORDER);
 const longDays = Number(process.env.NEWS_LONG_DAYS || 7);
 const maxPerKeyword = Number(process.env.NEWS_MAX_PER_KEYWORD || 6);
 
@@ -90,7 +91,7 @@ if (news.total === 0) {
 let mailed = false;
 for (let i = 1; i <= 3 && !mailed; i++) {
   try {
-    const r = await sendNewsEmail(news, { yongsanKeywords: yongsanRender });
+    const r = await sendNewsEmail(news, { yongsanKeywords: yongsanRender, order: chapterOrder });
     console.log('이메일 발송:', r.subject, '→', r.count, '명');
     mailed = true;
   } catch (e) {
@@ -130,7 +131,7 @@ if (mailed || kakaoOk) {
   console.log('아카이브 누적:', arc.added, '건 추가 · 총', arc.total, '건');
   writeFileSync(LAST_SENT, dateA, 'utf-8'); // 오늘 발송 완료 표시(늦은 크론 중복발송 방지)
   // 웹페이지는 '오늘 하루치 전체'로 재생성(증분 실행이 여러 번이어도 페이지는 항상 하루 전체)
-  const pageCount = writeDayPage({ yongsanKeywords: yongsanRender, mergeKeywords: mergeK, mergeLabel: mergeL, shortDays: hours / 24, longDays, longKeywords });
+  const pageCount = writeDayPage({ yongsanKeywords: yongsanRender, mergeKeywords: mergeK, mergeLabel: mergeL, shortDays: hours / 24, longDays, longKeywords, order: chapterOrder });
   console.log('웹 게시(오늘 하루치):', pageCount, '건');
 } else {
   console.error('이메일·카톡 모두 실패 — 이력 미기록(다음 실행 재시도)');
