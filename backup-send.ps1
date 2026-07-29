@@ -9,10 +9,11 @@ $log = Join-Path $dir "data\backup-send.log"
 function Log($m) { Add-Content -Path $log -Value ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $m) }
 
 Set-Location $dir
-# 1) sync cloud state (best effort) so we don't double-send what cloud already sent
-& git stash -q 2>$null
-& git pull --rebase -q origin main 2>$null
-& git stash pop -q 2>$null
+# 1) sync with remote WITHOUT ever detaching HEAD (past bug: rebase conflict left detached HEAD).
+#    Always ensure we are on 'main', then fast-forward-only pull. Never rebase/stash.
+& git checkout -q main 2>$null
+& git fetch -q origin main 2>$null
+& git merge -q --ff-only origin/main 2>$null   # ff-only: no merge commit, no conflict, no detach
 
 # 2) today's KST date
 $todayKst = (Get-Date).ToUniversalTime().AddHours(9).ToString("yyyy-MM-dd")
@@ -31,10 +32,18 @@ Log "not sent today - running local pipeline"
 $rc = $LASTEXITCODE
 Log ("pipeline exit=" + $rc)
 
-# 4) push updated state (best effort; git uses Windows Credential Manager, not gh keyring)
+# 4) push updated state. On non-fast-forward rejection, integrate remote (prefer local for
+#    state files) and retry once. Always stay on main.
 if ($rc -eq 0) {
+  & git checkout -q main 2>$null
   & git add -A 2>$null
-  & git -c user.name="vgun1205" -c user.email="vgun1205@gmail.com" commit -q -m "chore: local backup send $todayKst" 2>$null
-  & git push -q 2>$null
-  if ($LASTEXITCODE -eq 0) { Log "state pushed" } else { Log "push failed (state stays local)" }
+  & git -c user.name="vgun1205" -c user.email="vgun1205@gmail.com" commit -q -m "chore: local send $todayKst" 2>$null
+  & git push -q origin main 2>$null
+  if ($LASTEXITCODE -ne 0) {
+    Log "push rejected - integrating remote and retrying"
+    & git fetch -q origin main 2>$null
+    & git -c user.name="vgun1205" -c user.email="vgun1205@gmail.com" merge -q -X ours --no-edit origin/main 2>$null
+    & git push -q origin main 2>$null
+  }
+  if ($LASTEXITCODE -eq 0) { Log "state pushed" } else { Log "push FAILED (state stays local)" }
 }
