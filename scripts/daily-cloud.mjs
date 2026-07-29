@@ -3,6 +3,7 @@
 // 상태(data/seen.json·weekly.json·kakao.enc)는 워크플로가 저장소에 커밋해 다음 실행에 이어짐.
 // 환경변수는 GitHub Secrets/env로 주입(.env 불필요). PC가 꺼져 있어도 무관.
 import { collectNews, keyOf, mergeGroups } from '../lib/news.js';
+import { collectSources } from '../lib/sources.js';
 import { sendNewsEmail, buildNewsEmail } from '../lib/mailer.js';
 import { loadSeen, seenKeys, markSeen, saveSeen } from '../lib/seen.js';
 import { loadWeekly, dueWeekly, markWeekly, saveWeekly } from '../lib/weekly.js';
@@ -26,7 +27,7 @@ const weeklyDays = Number(process.env.NEWS_WEEKLY_DAYS || 7);
 const yongsanDays = Number(process.env.NEWS_YONGSAN_DAYS || 7);
 const hours = Number(process.env.NEWS_HOURS || 24);       // 일반 뉴스: 1일(24h)
 // 장기(7일) 조회 키워드 = 용산 + 중고 등. 없으면 용산 키워드만 장기로.
-const longKeywords = split(process.env.NEWS_LONG_KEYWORDS).length ? split(process.env.NEWS_LONG_KEYWORDS) : yongsanKeywords;
+const longKeywords = [...(split(process.env.NEWS_LONG_KEYWORDS).length ? split(process.env.NEWS_LONG_KEYWORDS) : yongsanKeywords), '용산 전문매체'];
 const longDays = Number(process.env.NEWS_LONG_DAYS || 7);
 const maxPerKeyword = Number(process.env.NEWS_MAX_PER_KEYWORD || 6);
 
@@ -58,6 +59,24 @@ const news = await collectNews({ keywords, hours, maxPerKeyword, seenKeys: seenK
 const mergeK = split(process.env.NEWS_MERGE_KEYWORDS);
 const mergeL = process.env.NEWS_MERGE_LABEL || '중고 농구';
 news.groups = mergeGroups(news.groups, mergeK, mergeL);
+
+// 전문매체(점프볼·바스켓코리아) 직접 수집 → 이미 나온/발송한 기사 제외 후 챕터로 추가.
+// 용산 관련은 '용산 전문매체' 키워드로 분류돼 '용산 소식' 챕터로 합쳐짐(누락 방지).
+const YONGSAN_SRC = '용산 전문매체';
+const yongsanRender = [...yongsanKeywords, YONGSAN_SRC];
+try {
+  const srcItems = await collectSources({ hours });
+  const seenAll = new Set([...seenKeys(store), ...news.groups.flatMap((g) => g.items).map(keyOf)]);
+  const fresh = [];
+  for (const it of srcItems) { const k = keyOf(it); if (!k || seenAll.has(k)) continue; seenAll.add(k); fresh.push(it); }
+  const ysSrc = fresh.filter((it) => it.keyword === YONGSAN_SRC).sort((a, b) => b.ts - a.ts);
+  const genSrc = fresh.filter((it) => it.keyword !== YONGSAN_SRC).sort((a, b) => b.ts - a.ts);
+  if (genSrc.length) news.groups.push({ keyword: '전문매체', items: genSrc });
+  if (ysSrc.length) news.groups.push({ keyword: YONGSAN_SRC, items: ysSrc });
+  news.total = news.groups.reduce((n, g) => n + g.items.length, 0);
+  console.log('전문매체 추가:', genSrc.length, '건(+용산', ysSrc.length, '건)');
+} catch (e) { console.error('전문매체 수집 경고:', e?.message || e); }
+
 console.log('신규 기사:', news.total, '건');
 
 if (news.total === 0) {
@@ -71,7 +90,7 @@ if (news.total === 0) {
 let mailed = false;
 for (let i = 1; i <= 3 && !mailed; i++) {
   try {
-    const r = await sendNewsEmail(news, { yongsanKeywords });
+    const r = await sendNewsEmail(news, { yongsanKeywords: yongsanRender });
     console.log('이메일 발송:', r.subject, '→', r.count, '명');
     mailed = true;
   } catch (e) {
@@ -111,7 +130,7 @@ if (mailed || kakaoOk) {
   console.log('아카이브 누적:', arc.added, '건 추가 · 총', arc.total, '건');
   writeFileSync(LAST_SENT, dateA, 'utf-8'); // 오늘 발송 완료 표시(늦은 크론 중복발송 방지)
   // 웹페이지는 '오늘 하루치 전체'로 재생성(증분 실행이 여러 번이어도 페이지는 항상 하루 전체)
-  const pageCount = writeDayPage({ yongsanKeywords, mergeKeywords: mergeK, mergeLabel: mergeL, shortDays: hours / 24, longDays, longKeywords });
+  const pageCount = writeDayPage({ yongsanKeywords: yongsanRender, mergeKeywords: mergeK, mergeLabel: mergeL, shortDays: hours / 24, longDays, longKeywords });
   console.log('웹 게시(오늘 하루치):', pageCount, '건');
 } else {
   console.error('이메일·카톡 모두 실패 — 이력 미기록(다음 실행 재시도)');
