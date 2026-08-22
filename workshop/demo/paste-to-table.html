@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>엑셀 붙여넣기 → 지표 자동 인식 (워크샵 시연용)</title>
+<style>
+  :root{--ink:#0f172a;--sub:#64748b;--line:#e2e8f0;--bg:#f1f5f9;--card:#fff;--accent:#1f3b57;--ok:#0f766e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Pretendard','Malgun Gothic',system-ui,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:24px 16px 60px}
+  h1{font-size:21px;margin:0 0 4px}
+  .sub{color:var(--sub);font-size:13.5px;margin:0 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+  .card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  .step{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;align-items:center;justify-content:center;flex:0 0 auto}
+  textarea{width:100%;height:150px;border:1px solid var(--line);border-radius:10px;padding:12px;font:13px/1.5 ui-monospace,Consolas,monospace;resize:vertical}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  button{font:600 13.5px/1 'Pretendard','Malgun Gothic',sans-serif;padding:11px 16px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button:disabled{opacity:.45;cursor:default}
+  .msg{margin-top:12px;font-size:13.5px;font-weight:600;color:var(--ok);min-height:20px}
+  .msg.err{color:#b91c1c}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:center}
+  th{background:#eef2f7;font-weight:700}
+  td.h{text-align:left;color:var(--sub)}
+  .tag{display:inline-block;background:#e6f2f1;color:var(--ok);border-radius:6px;padding:2px 7px;font-size:12px;font-weight:700}
+  .none{color:#b91c1c;font-weight:700}
+  .note{font-size:12.5px;color:var(--sub);margin-top:10px}
+  .scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>엑셀 붙여넣기 → 지표 자동 인식</h1>
+  <p class="sub">평가사·시가평가 포털 화면을 <b>그대로 복사해 붙여넣으면</b> 머리글을 읽어 어떤 지표인지 스스로 맞춥니다.
+     설치·서버·인터넷 없이 이 파일 하나로 동작합니다. (워크샵 백업 시연용 축약판)</p>
+
+  <div class="card">
+    <h2><span class="step">1</span> 표를 붙여넣기</h2>
+    <textarea id="src" placeholder="엑셀에서 표를 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V) — 탭/쉼표 구분 모두 인식"></textarea>
+    <div class="row">
+      <button class="primary" id="go">미리보기</button>
+      <button id="sample">샘플 표 넣기</button>
+      <button id="clear">지우기</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card" id="result" style="display:none">
+    <h2><span class="step">2</span> 인식 결과</h2>
+    <div class="scroll"><table id="map"></table></div>
+    <h2 style="margin-top:18px"><span class="step">3</span> 저장될 값</h2>
+    <div class="scroll"><table id="rows"></table></div>
+    <p class="note">실제 시스템에서는 이 상태에서 <b>‘가져오기 실행’</b> 한 번으로 DB에 반영되고,
+       대시보드의 전일·전월·전분기·전년 비교가 즉시 갱신됩니다.</p>
+  </div>
+</div>
+
+<script>
+/* 머리글 → 지표 코드 매핑 규칙 — 채권 종류 + 만기 키워드로 판별 */
+const LABEL = {
+  ktb3y:"국고채 3년", ktb5y:"국고채 5년", ktb10y:"국고채 10년", ktb20y:"국고채 20년", ktb30y:"국고채 30년",
+  sgbAAA5yYld:"특수채 AAA 5년", sgbAAA10yYld:"특수채 AAA 10년",
+  corpAA3yYield:"회사채 AA- 3년", corpAA10yYld:"회사채 AA- 10년",
+  usdkrw:"원/달러", eurkrw:"원/유로", kospi:"코스피",
+};
+function mapHeader(raw){
+  const s=(raw||"").replace(/\s/g,"");
+  if(!s) return null;
+  if(LABEL[s]) return s;
+  const my=s.match(/(\d+)\s*(?:년|y)/i);
+  const m=my?Number(my[1]):null;
+  if(/특수채|공사채|공단채|AAA/.test(s)){ if(m===5) return "sgbAAA5yYld"; if(m===10) return "sgbAAA10yYld"; }
+  if(/회사채|무보증|AA-|AA−/.test(s)){ if(m===3) return "corpAA3yYield"; if(m===10) return "corpAA10yYld"; }
+  if(/국고|국채/.test(s)){ return ({3:"ktb3y",5:"ktb5y",10:"ktb10y",20:"ktb20y",30:"ktb30y"})[m]||null; }
+  if(/달러|usd/i.test(s)) return "usdkrw";
+  if(/유로|eur/i.test(s)) return "eurkrw";
+  if(/코스피|kospi/i.test(s)) return "kospi";
+  return null;
+}
+
+const dateRe=/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/;
+const pad=n=>String(n).padStart(2,"0");
+const $=id=>document.getElementById(id);
+
+function parse(){
+  const text=$("src").value;
+  const msg=$("msg"); msg.className="msg"; $("result").style.display="none";
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2) return fail("머리글 + 데이터 행이 필요합니다.");
+  const delim=lines[0].includes("\t")?"\t":",";
+  const grid=lines.map(l=>l.split(delim).map(c=>c.trim()));
+  const firstData=grid.findIndex(r=>r.some(c=>dateRe.test(c)));
+  if(firstData<1) return fail("날짜 행을 찾지 못했습니다. (머리글 + YYYY-MM-DD 형태의 날짜가 필요)");
+  const ncol=Math.max(...grid.map(r=>r.length));
+  /* 머리글이 2~3줄로 쪼개져 있어도 세로로 이어붙여 하나로 본다 — 실제 포털 표가 이렇게 생겼다 */
+  const combined=[];
+  for(let c=0;c<ncol;c++) combined[c]=grid.slice(0,firstData).map(r=>r[c]||"").join("");
+  const dateCol=grid[firstData].findIndex(c=>dateRe.test(c));
+  const mapping=[];
+  for(let c=0;c<ncol;c++){ if(c===dateCol) continue; mapping.push({col:c,header:combined[c],id:mapHeader(combined[c])}); }
+  const hit=mapping.filter(m=>m.id);
+  if(!hit.length) return fail("인식된 지표가 없습니다. 머리글에 ‘특수채 AAA 10년’처럼 종목·만기가 있어야 합니다.");
+  const out=[];
+  for(let i=firstData;i<grid.length;i++){
+    const dm=(grid[i][dateCol]||"").match(dateRe); if(!dm) continue;
+    const date=`${dm[1]}-${pad(+dm[2])}-${pad(+dm[3])}`;
+    for(const m of hit){
+      const v=parseFloat(String(grid[i][m.col]||"").replace(/,/g,""));
+      if(!isNaN(v)) out.push({date,indicator:m.id,value:v});
+    }
+  }
+  render(mapping,out);
+  msg.textContent=`인식: 지표 ${hit.length}개 · 값 ${out.length}개 — 확인 후 ‘가져오기 실행’ 한 번이면 끝.`;
+  $("result").style.display="";
+}
+function fail(t){ const m=$("msg"); m.className="msg err"; m.textContent=t; }
+
+function render(mapping,rows){
+  $("map").innerHTML="<tr><th style='width:46%'>붙여넣은 머리글</th><th>인식된 지표</th><th>코드</th></tr>"+
+    mapping.map(m=>`<tr><td class="h">${esc(m.header)||"<i>(빈 칸)</i>"}</td>`+
+      (m.id?`<td><span class="tag">${LABEL[m.id]}</span></td><td>${m.id}</td>`
+           :`<td class="none">인식 안 됨</td><td>–</td>`)+`</tr>`).join("");
+  const show=rows.slice(0,12);
+  $("rows").innerHTML="<tr><th>날짜</th><th>지표</th><th>값</th></tr>"+
+    show.map(r=>`<tr><td>${r.date}</td><td>${LABEL[r.indicator]}</td><td>${r.value}</td></tr>`).join("")+
+    (rows.length>show.length?`<tr><td colspan="3" style="color:#64748b">… 외 ${rows.length-show.length}개</td></tr>`:"");
+}
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+const SAMPLE=
+"구분\t국고채\t국고채\t특수채 AAA\t특수채 AAA\t회사채 AA-\t회사채 AA-\t환율\n"+
+"만기\t3년\t10년\t5년\t10년\t3년\t10년\t원/달러\n"+
+"2026-08-18\t2.615\t2.985\t3.112\t3.404\t3.288\t3.712\t1,382.50\n"+
+"2026-08-19\t2.622\t2.998\t3.120\t3.415\t3.295\t3.724\t1,379.20\n"+
+"2026-08-20\t2.640\t3.021\t3.141\t3.436\t3.310\t3.741\t1,385.70\n"+
+"2026-08-21\t2.634\t3.014\t3.135\t3.429\t3.304\t3.735\t1,388.10\n";
+
+$("go").onclick=parse;
+$("sample").onclick=()=>{ $("src").value=SAMPLE; parse(); };
+$("clear").onclick=()=>{ $("src").value=""; $("msg").textContent=""; $("result").style.display="none"; };
+</script>
+</body>
+</html>
